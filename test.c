@@ -10,12 +10,12 @@ Concurrent UNIC Processes and Shared Memory */
 
 int main(int argc, char *argv[]){
 	
-	pid_t ps[5];
-	int pCount = 5;
+	pid_t ps[1];
+	int pCount = 1;
 	
     time_t endwait;
     time_t start = time(NULL);
-    int timeToWait = 5; // end loop after this time has elapsed
+    int timeToWait = 10; // end loop after this time has elapsed
 	
 	char errstr[50];
 	snprintf(errstr, sizeof errstr, "%s: Error: ", argv[0]);
@@ -57,18 +57,22 @@ int main(int argc, char *argv[]){
     endwait = start + timeToWait;
 
     printf("start time is : %s", ctime(&start));
-	printf("LINES: %d\n", countlines("palindromes.txt"));
 	
 	printf("Trying to make kids:\n");
-	for(i = 0; i < 5; i++){
+	for(i = 0; i < pCount; i++){
 		if ((ps[i] = fork()) < 0) {
 			perror(errstr); 
 			printf("Fork failed!\n");
 			exit(1);
 		}
 		else if (ps[i] == 0){
-			printf("Trying to exec!\n");
-			execlp("child", "child", NULL);
+			// pass to the execlp, the name of the code to exec
+			// the # child it is
+			char cProNum[5];
+			sprintf(cProNum, "%i", i);
+			char totalProNum[5];
+			sprintf(totalProNum, "%i", pCount);
+			execlp("child", "child", cProNum, totalProNum, NULL);
 			perror(errstr); 
 			printf("execl() failed!\n");
 			exit(1);
@@ -81,8 +85,7 @@ int main(int argc, char *argv[]){
     {  
         /* Do stuff while waiting */
         start = time(NULL);
-		sleep(1);
-        printf("loop time is : %s", ctime(&start));
+		sleep(5);
 		pid = wait(&status);
 		printf("Child #%ld exited with status %i\n", (long)pid, status);
 		--pCount;
@@ -91,26 +94,4 @@ int main(int argc, char *argv[]){
     printf("end time is %s", ctime(&endwait));
 
     return 0;
-}
-
-int countlines(char *filename)
-{
-	// count the number of lines in the file called filename                                    
-	FILE *fp = fopen(filename,"r");
-	int ch = 0;
-	int lines = 0;
-
-	if (fp == NULL){
-		return 0;
-	}
-
-	lines++;
-	while ((ch = fgetc(fp)) != EOF){
-		if (ch == '\n'){
-			lines++;
-		}
-	}
-	
-	fclose(fp);
-	return lines;
 }
