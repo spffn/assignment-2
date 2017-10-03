@@ -10,27 +10,31 @@ Concurrent UNIC Processes and Shared Memory */
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/stat.h>
+#include <signal.h>
 
 #define SHMSZ     27
+
+char errstr[50];
+off_t fsize(void);
 
 int main(int argc, char *argv[]){
 	
 	// the processes to create
 	pid_t ps[3];
-	int pCount = 3;
+	int pCount = 1;
 	
 	// shared memory
 	int shmid;
 	key_t key;
-	char *shm, *s;
+	char *shm;
 	
 	// the timer information
     time_t endwait;
     time_t start = time(NULL);
-    int timeToWait = 10; 		// end loop after this time has elapsed
+    int timeToWait = 5; 		// end loop after this time has elapsed
 	
 	// for printing errors
-	char errstr[50];
 	snprintf(errstr, sizeof errstr, "%s: Error: ", argv[0]);
 	int i, c;
 	opterr = 0;	
@@ -72,27 +76,49 @@ int main(int argc, char *argv[]){
 
     printf("Start time is : %s", ctime(&start));
 	
+	
+	// SHARED MEMORY STUFF
 	// shared mem is called '1001' which is a palindrome
 	key = 1001;
+	int lc = count();			// line count of file
 	
-	// create segment
-	if ((shmid = shmget(key, SHMSZ, IPC_CREAT | 0666)) < 0) {
-        perror("shmget");
+	// create segment of appropriate size to hold all the info from file
+	if ((shmid = shmget(key, (fsize() + lc + (lc + 1) * sizeof(char *)), IPC_CREAT | 0666)) < 0) {
+        perror("shmget failed");
         exit(1);
     }
 	
 	// attach segment to data space
 	if ((shm = shmat(shmid, NULL, 0)) == (char *) -1) {
-        perror("shmat");
+        perror("shmat failed");
         exit(1);
     }
 	
-	// put crap in it
-	s = shm;
-	for (c = 'a'; c <= 'z'; c++){
-        *s++ = c;
+	char **mylist;				// shared memory list
+	mylist = (char **)shm;		// the beginning of the shared mem block
+	mylist[lc] = NULL;			// when mylist[n] returns NULL its because you
+								// have reached its end
+								
+	char * buf;
+	buf = (char *)(&mylist[lc+1]);  // points to the spot in memory block right
+									// after where the mylist ends
+	
+	// open file and put the lines into shared memory
+	FILE * f = fopen("palindromes.txt", "r");
+	if (f == 0)
+    {
+		perror(errstr);
+        fprintf(stderr, "Failed to open file for reading\n");
+        return 1;
+    }
+	
+	int w = 0;
+	while(!feof(f)) {
+		mylist[w++] = buf;
+		fgets(buf, fsize(), f);
+		buf += strlen(buf) +1;
 	}
-    *s = NULL;
+	fclose(f);
 	
 	for(i = 0; i < pCount; i++){
 		int lineToTest;			// for tracking lines the process is assigned
@@ -120,18 +146,34 @@ int main(int argc, char *argv[]){
 	
 	int status;
 	pid_t pid;
-	
-    while (start < endwait || pCount > 0)
+	int pC, tProc;		// counter for for loop in while
+						// total active processes
+	tProc = pCount;		// intially set to same # as spawned processes
+		
+	// master waits until the time runs out or the children all end
+    while ((start < endwait) && (tProc > 0))
     {  
-        /* Do stuff while waiting */
+		// check time while running
         start = time(NULL);
 		sleep(1);
-		pid = wait(&status);
-		--pCount;
+		// keep checking to see if all the children still exist
+		for(pC = 0; pC < pCount; pC++){
+			// if call succeeds, process with this pid still exists
+			if(kill(ps[pC], 0)) { break; }
+			// else its already dead, so decrement total process count
+			else { tProc--; }
+		}
     }
+	time_t outOfLoop = time(NULL);
 	
-	if(start < endwait && pCount > 0){
-		printf("Out of time! Terminating %i children due to constraints.", pCount);
+	// if the while loop ran out and there were still children
+	// then print a notice and kill them
+	if(start < endwait && tProc > 0){
+		printf("Out of time! Terminating %i children due to constraints.", tProc);
+		for(pC = 0; pC < pCount; pC){
+			if(kill(ps[pC], 0)) { }
+			else { kill(ps[pC], SIGKILL); }
+		}
 	}
 	
     printf("end time is %s", ctime(&endwait));
@@ -140,4 +182,43 @@ int main(int argc, char *argv[]){
 	shmctl(shmid, IPC_RMID, NULL);
 
     return 0;
+}
+
+// get the size of the file
+off_t fsize(){
+	struct stat st;
+
+    if (stat("palindromes.txt", &st) == 0){
+        return st.st_size;
+	}
+
+	perror(errstr); 
+    printf("Cannot determine size of palindromes.txt\n");
+
+    return 1;
+}
+
+// get the # of lines in the file
+int count(){
+	FILE *f = fopen("palindromes.txt","r");
+	int lines = 0;
+	int ch = 0;
+	
+	if (f == NULL){
+		perror(errstr); 
+		printf("Cannot open palindromes.txt\n");
+		return 1;
+	}
+	
+	while(!feof(f))
+	{
+		ch = fgetc(f);
+		if(ch == '\n')
+		{
+			lines++;
+		}
+	}
+	
+	fclose(f);
+	return lines;
 }
