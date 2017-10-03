@@ -51,28 +51,19 @@ int main(int argc, char *argv[]){
 	
 	printf("%ld reading line %i from shared memory: \n", pid, lineToTest);
 	
-	int w = 0, g = 0, v = 0;
+	int i;
 	char ch;
 	char phrase[200];
-	while((*mylist)[w][0] != NULL){
-		ch = (*mylist)[w][g];
-		
-		if(ch == '\0')
-		{
-			phrase[v] = ch;
-			//printf("%s\n", (*mylist)[w]);
-			w++;
-			g = 0;
-			v = 0;
+	for(i = 0; i < 200; i++){
+		ch = (*mylist)[lineToTest][i];
+		if(ch == '\0') { 
+			phrase[i] = ch;
+			break;
 		}
-		else {
-			phrase[v] = ch;
-			g++;
-			v++;
-		}
+		else { phrase[i] = ch; }
 	}
 	
-	printf("%s\n", phrase);
+	printf("Line is: %s\n", phrase);
 	
 	
 	/*
