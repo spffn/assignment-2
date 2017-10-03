@@ -1,7 +1,7 @@
 /* Taylor Clark
 CS 4760
 Assignment #2
-Concurrent UNIC Processes and Shared Memory */
+Concurrent UNIX Processes and Shared Memory */
 
 #include <ctype.h>
 #include <stdio.h>
@@ -25,9 +25,7 @@ int main(int argc, char *argv[]){
 	
 	// shared memory
 	int shmid;
-	key_t key;
-	char *shm, **mylist;
-	key = 1001;
+	key_t key = 1001;
 	
 	// locate the segment
 	if ((shmid = shmget(key, SHMSZ, 0666)) < 0) {
@@ -35,31 +33,46 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 	
+	char (*mylist)[][200];
 	// attach to our data space
-	if ((shm = shmat(shmid, NULL, 0)) == (char *) -1) {
+	if ((mylist = shmat(shmid, NULL, 0)) == (char *) -1) {
         perror("shmat");
         exit(1);
     }
 	
 	
-	int pNum = atoi(argv[1]);	// telling the process which # child it is
-	int cLine = 0;				// for tracking lines in file
-	int lineToTest = pNum;		
+	int pNum = atoi(argv[1]);		// telling the process which # child it is
+	int cLine = 0;					// for tracking lines in file
+	int lineToTest = atoi(argv[2]);	// which line to test first
 	
 	printf("I'm child process #%i!\n", pNum+1);
 	fprintf(stderr, "Process ID: %ld\n", pid);
 	fprintf(stderr, "Parent ID: %ld\n\n", (long)getppid());
 	
-	printf("%ld reading from shared memory: \n", pid);
-	int i = 0;
-	char s[100];
-	mylist = (char **)shm;
-	while(mylist[i] != NULL){
-        memcpy(s, mylist[i], strlen(mylist[i]));
-		printf("%i: %s\n", i, s);
-		i++;
+	printf("%ld reading line %i from shared memory: \n", pid, lineToTest);
+	
+	int w = 0, g = 0, v = 0;
+	char ch;
+	char phrase[200];
+	while((*mylist)[w][0] != NULL){
+		ch = (*mylist)[w][g];
+		
+		if(ch == '\0')
+		{
+			phrase[v] = ch;
+			//printf("%s\n", (*mylist)[w]);
+			w++;
+			g = 0;
+			v = 0;
+		}
+		else {
+			phrase[v] = ch;
+			g++;
+			v++;
+		}
 	}
-    putchar('\n');
+	
+	printf("%s\n", phrase);
 	
 	
 	/*

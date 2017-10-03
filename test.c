@@ -1,7 +1,7 @@
 /* Taylor Clark
 CS 4760
 Assignment #2
-Concurrent UNIC Processes and Shared Memory */
+Concurrent UNIX Processes and Shared Memory */
 
 #include <stdio.h>
 #include <time.h>
@@ -16,7 +16,7 @@ Concurrent UNIC Processes and Shared Memory */
 #define SHMSZ     27
 
 char errstr[50];
-off_t fsize(void);
+off_t fsize(char []);
 
 int main(int argc, char *argv[]){
 	
@@ -27,7 +27,9 @@ int main(int argc, char *argv[]){
 	// shared memory
 	int shmid;
 	key_t key;
-	char *shm;
+	
+	// file name
+	char fname[] = "palindromes.txt";
 	
 	// the timer information
     time_t endwait;
@@ -40,34 +42,60 @@ int main(int argc, char *argv[]){
 	opterr = 0;	
 
 	// parse the command line arguments
-	while ((c = getopt(argc, argv, ":t:h")) != -1) {
+	while ((c = getopt(argc, argv, ":t:hl::")) != -1) {
 		switch (c) {
 			// sets the amount of time to let a program run until termination
-			case 't':
+			case 't': {
 				timeToWait = atoi(optarg);
+				printf ("Program run time set to: %i\n", timeToWait);
 				break;
+			}
+			// setting name of file of palindromes to read from	
+			case 'l': {
+				int result;
+				char newname[200];
+				strcpy(newname, optarg);
+				result = rename(fname, newname);
+				if(result == 0) {
+					printf ("File renamed from %s to %s\n", fname, newname);
+					strcpy(fname, newname);
+				}
+				else {
+					perror(errstr);
+					printf("Error renaming file.\n");
+				}
+				break;
+			}
 			// show help
-			case 'h':
+			case 'h': {
 				fprintf(stderr, "\n----------\n");
 				fprintf(stderr, "HELP LIST: \n");
 				fprintf(stderr, "-t: \n");
 				fprintf(stderr, "\tSets the amount of seconds to wait before terminating program. \n");
 				fprintf(stderr, "\tDefault is 60 seconds. Must be a number. \n");
 				fprintf(stderr, "\tex: -t 60 \n");
+				
+				fprintf(stderr, "-l: \n");
+				fprintf(stderr, "\tSets the name of the file to look for palindromes in. Please include extension.\n");
+				fprintf(stderr, "\tex: -l filename \n");
+				
 				fprintf(stderr, "-h: \n");
 				fprintf(stderr, "\tShow help, valid options and required arguments. \n");
 				fprintf(stderr, "----------\n\n");
 				break;
+			}
 			// if no argument is given, print an error and end.
-			case ':':
+			case ':': {
 				perror(errstr);
 				fprintf(stderr, "-%s requires an argument. \n", optopt);
 				return 1;
+			}
 			// if an invalid option is caught, print that it is invalid and end
-			case '?':
+			case '?': {
 				perror(errstr);
 				fprintf(stderr, "Invalid option(s): %s \n", optopt);
 				return 1;
+			}
 		}
 	}
 
@@ -80,48 +108,55 @@ int main(int argc, char *argv[]){
 	// SHARED MEMORY STUFF
 	// shared mem is called '1001' which is a palindrome
 	key = 1001;
-	int lc = count();			// line count of file
+	int lc = count(fname);			// line count of file
+	char (*mylist)[lc][200];		// shared memory list
 	
 	// create segment of appropriate size to hold all the info from file
-	if ((shmid = shmget(key, (fsize() + lc + (lc + 1) * sizeof(char *)), IPC_CREAT | 0666)) < 0) {
+	if ((shmid = shmget(key, SHMSZ, IPC_CREAT | 0666)) < 0) {
         perror("shmget failed");
         exit(1);
     }
 	
 	// attach segment to data space
-	if ((shm = shmat(shmid, NULL, 0)) == (char *) -1) {
+	if ((mylist = shmat(shmid, NULL, 0)) == (char *) -1) {
         perror("shmat failed");
         exit(1);
     }
-	
-	char **mylist;				// shared memory list
-	mylist = (char **)shm;		// the beginning of the shared mem block
-	mylist[lc] = NULL;			// when mylist[n] returns NULL its because you
+			
+	(*mylist)[lc][0] = NULL;	// when mylist[n] returns NULL its because you
 								// have reached its end
-								
-	char * buf;
-	buf = (char *)(&mylist[lc+1]);  // points to the spot in memory block right
-									// after where the mylist ends
+
 	
-	// open file and put the lines into shared memory
-	FILE * f = fopen("palindromes.txt", "r");
+	// open file
+	FILE * f = fopen(fname, "r");
 	if (f == 0)
     {
 		perror(errstr);
-        fprintf(stderr, "Failed to open file for reading\n");
+        printf("Failed to open %s for reading\n", fname);
         return 1;
     }
 	
-	int w = 0;
-	while(!feof(f)) {
-		mylist[w++] = buf;
-		fgets(buf, fsize(), f);
-		buf += strlen(buf) +1;
+	// write to shared memory
+	int w = 0, g = 0;
+	char ch;
+	while(!feof(f))
+	{
+		ch = fgetc(f);
+		if(ch == '\n')
+		{
+			(*mylist)[w][g] = '\0';
+			//printf("%s\n", (*mylist)[w]);
+			w++;
+			g = 0;
+		}
+		else {
+			(*mylist)[w][g] = ch;
+			g++;
+		}
 	}
 	fclose(f);
 	
 	for(i = 0; i < pCount; i++){
-		int lineToTest;			// for tracking lines the process is assigned
 		
 		if ((ps[i] = fork()) < 0) {
 			perror(errstr); 
@@ -133,11 +168,9 @@ int main(int argc, char *argv[]){
 			// the # child it is
 			char id[5];
 			sprintf(id, "%i", i);
-			char totalProNum[5];
-			sprintf(totalProNum, "%i", pCount);
 			char xx[5];
-			sprintf(xx, "%i", 0);
-			execlp("palin", "palin", id, xx, totalProNum, NULL);
+			sprintf(xx, "%i", i);
+			execlp("palin", "palin", id, xx, NULL);
 			perror(errstr); 
 			printf("execl() failed!\n");
 			exit(1);
@@ -185,28 +218,28 @@ int main(int argc, char *argv[]){
 }
 
 // get the size of the file
-off_t fsize(){
+off_t fsize(char fname[]){
 	struct stat st;
 
-    if (stat("palindromes.txt", &st) == 0){
+    if (stat(fname, &st) == 0){
         return st.st_size;
 	}
 
 	perror(errstr); 
-    printf("Cannot determine size of palindromes.txt\n");
+    printf("Cannot determine size of %s\n", fname);
 
     return 1;
 }
 
 // get the # of lines in the file
-int count(){
-	FILE *f = fopen("palindromes.txt","r");
+int count(char fname[]){
+	FILE *f = fopen(fname, "r");
 	int lines = 0;
 	int ch = 0;
 	
-	if (f == NULL){
+	if (f == 0){
 		perror(errstr); 
-		printf("Cannot open palindromes.txt\n");
+		printf("Cannot open %s\n", fname);
 		return 1;
 	}
 	
