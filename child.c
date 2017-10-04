@@ -110,7 +110,7 @@ int main(int argc, char *argv[]){
 		// when they enter and exit
 		turn = pNum;*/
 		
-		fprintf(stderr, "%ld: Entering critical section at %s", pid, ctime(&timeNote));*/
+		fprintf(stderr, "%ld: Entering critical section at %s", pid, ctime(&timeNote));
 		critical_section(result, lineToTest, phrase);
 		fprintf(stderr, "%ld: Exitting critical section at %s", pid, ctime(&timeNote));
 		
@@ -182,6 +182,7 @@ void critical_section(int yes, int index, char phrase[]){
 	if(yes == 1){
 		fil = fopen("palin.out", "a");
 		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
+	}
 	else{
 		fil = fopen("nopalin.out", "a");
 		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
