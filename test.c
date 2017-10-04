@@ -13,16 +13,14 @@ Concurrent UNIX Processes and Shared Memory */
 #include <sys/stat.h>
 #include <signal.h>
 
-#define SHMSZ     27
-
 char errstr[50];
 off_t fsize(char []);
 
 int main(int argc, char *argv[]){
 	
 	// the processes to create
-	pid_t ps[3];
-	int pCount = 1;
+	pid_t ps[5];
+	int pCount = 5;
 	
 	// shared memory
 	int shmid;
@@ -112,7 +110,7 @@ int main(int argc, char *argv[]){
 	char (*mylist)[lc][200];		// shared memory list
 	
 	// create segment of appropriate size to hold all the info from file
-	if ((shmid = shmget(key, SHMSZ, IPC_CREAT | 0666)) < 0) {
+	if ((shmid = shmget(key, 10000, IPC_CREAT | 0666)) < 0) {
         perror("shmget failed");
         exit(1);
     }
@@ -145,7 +143,6 @@ int main(int argc, char *argv[]){
 		if(ch == '\n')
 		{
 			(*mylist)[w][g] = '\0';
-			//printf("%s\n", (*mylist)[w]);
 			w++;
 			g = 0;
 		}
@@ -166,11 +163,15 @@ int main(int argc, char *argv[]){
 		else if (ps[i] == 0){
 			// pass to the execlp, the name of the code to exec
 			// the # child it is
+			// the line to execute
+			// total # of lines in file
 			char id[5];
 			sprintf(id, "%i", i);
 			char xx[5];
 			sprintf(xx, "%i", i);
-			execlp("palin", "palin", id, xx, NULL);
+			char ln[5];
+			sprintf(ln, "%i", lc);
+			execlp("palin", "palin", id, xx, ln, NULL);
 			perror(errstr); 
 			printf("execl() failed!\n");
 			exit(1);

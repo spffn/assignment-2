@@ -10,25 +10,24 @@ Concurrent UNIX Processes and Shared Memory */
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <time.h>
 
-#define SHMSZ     27
 int writeLimit = 0;			// for limiting writes to the files
 time_t timeNote;
 
 int main(int argc, char *argv[]){
 	
-	// process id
-	pid_t pid = (long)getpid();
-	
-	// for timestamps
-	timeNote = time(NULL);
+	pid_t pid = (long)getpid();		// process id
+	int pNum = atoi(argv[1]);		// telling the process which # child it is
+	int lineToTest = atoi(argv[2]);	// which line to test first
+	int ln = atoi(argv[3]);			// total lines in file
 	
 	// shared memory
 	int shmid;
 	key_t key = 1001;
 	
 	// locate the segment
-	if ((shmid = shmget(key, SHMSZ, 0666)) < 0) {
+	if ((shmid = shmget(key, 10000, 0666)) < 0) {
         perror("shmget");
         exit(1);
     }
@@ -41,90 +40,73 @@ int main(int argc, char *argv[]){
     }
 	
 	
-	int pNum = atoi(argv[1]);		// telling the process which # child it is
-	int cLine = 0;					// for tracking lines in file
-	int lineToTest = atoi(argv[2]);	// which line to test first
-	
-	printf("I'm child process #%i!\n", pNum+1);
-	fprintf(stderr, "Process ID: %ld\n", pid);
-	fprintf(stderr, "Parent ID: %ld\n\n", (long)getppid());
-	
-	printf("%ld reading line %i from shared memory: \n", pid, lineToTest);
+	//fprintf(stderr, "Child #%i || Process ID: %ld || Parent ID: %ld\n", pNum + 1 , pid, (long)getppid());
 	
 	int i;
-	char ch;
-	char phrase[200];
-	for(i = 0; i < 200; i++){
-		ch = (*mylist)[lineToTest][i];
-		if(ch == '\0') { 
-			phrase[i] = ch;
-			break;
+	for(i = 0; i < 5; i++){
+		
+		if(lineToTest > ln){
+			printf("Trying to test line higher than exists!\n");
+			return 0;
 		}
-		else { phrase[i] = ch; }
-	}
-	
-	printf("Line is: %s\n", phrase);
-	
-	
-	/*
-	
-	int ch = 0;
-	if(f != NULL){
-		char testLine[150];
-		while (fgets(testLine, sizeof testLine, f) != NULL){
-			if (cLine == lineToTest){
-				if(is_palindrome(testLine, sizeof testLine) != 0){
-					
-					// YES it was a palindrome
-					// check has the write limit been met yet? if no, then go to crit sec
-					printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
-					if(writeLimit > 5){
-						printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
-						critical_section(0);
-						printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
-					}
-					
-					// else end the process
-					else { return 0; }
-					
-					//printf("%ld, #%i || YES Palindrome!: %s \n", pid, cLine, testLine);
-					lineToTest = lineToTest + atoi(argv[3]);
-				}
-				
-				else { 
-				
-					// NOT A PALINDROME
-					// check has the write limit been met yet? if no, then go to crit sec
-					printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
-					if(writeLimit > 5){
-						printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
-						critical_section(1);
-						printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
-					}
-					else { return 0; }
-					
-					//printf("%ld, #%i  || NO Palindrome!: %s \n", pid, cLine, testLine); 
-				}
+		
+		int j;
+		char ch;
+		char phrase[100];
+		for(j = 0; j < 100; j++){
+			ch = (*mylist)[lineToTest][j];
+			if(ch == '\0') { 
+				phrase[j] = ch;
+				break;
 			}
-			else { cLine++; }
+			else { phrase[j] = ch; }
 		}
+		
+		if(is_palindrome(phrase, strlen(phrase)) != 0){		
+			// YES it was a palindrome
+			// check has the write limit been met yet? if no, then go to crit sec
+			timeNote = time(NULL);
+			printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
+			
+			/*
+			printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
+			critical_section(0);
+			printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
+			*/
+			
+			printf("Process %ld, #%i || YES!: %s \n", pid, lineToTest, phrase);
+		}			
+		else { 	
+			// NOT A PALINDROME
+			// check has the write limit been met yet? if no, then go to crit sec
+			timeNote = time(NULL);
+			printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
+
+			/*
+			printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
+			critical_section(1);
+			printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
+			*/
+						
+			printf("Process %ld, #%i || NO!: %s \n", pid, lineToTest, phrase);
+		}
+		
+		lineToTest = lineToTest + 20;
 	}
 	
-	fclose(f);*/
 	return 0;
 }
 
 // check if the passed phrase is a palindrome
-int is_palindrome(const char *phrase, unsigned length) {
+// start by cleaning the string up and then check it
+int is_palindrome(char phrase[], unsigned length) {
 	
-	int i; 
-	int c = 0;
+	int i, c = 0;
 	char newStr[50];
 	
 	for(i = 0; i < length; i++){
 		char x = phrase[i];
 		if(x == '\0'){ 
-			newStr[c] = x; 
 			break;
 		}
 		else if(isspace(x)){ continue; }
@@ -163,7 +145,6 @@ void critical_section(int yes){
 		// generate val between 0 and 2 to sleep before exit
 		r = rand() % (2 - 0 + 1) + 0;
 		sleep(r);
-		writeLimit++;
 	}
 	else {
 		// the line was NOT a palindrome
@@ -176,6 +157,5 @@ void critical_section(int yes){
 		// generate val between 0 and 2 to sleep before exit
 		r = rand() % (2 - 0 + 1) + 0;
 		sleep(r);
-		writeLimit++;
 	}
 }
