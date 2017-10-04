@@ -1,7 +1,13 @@
 /* Taylor Clark
 CS 4760
 Assignment #2
-Concurrent UNIX Processes and Shared Memory */
+Concurrent UNIX Processes and Shared Memory 
+
+THIS PROJECT DOES NOT DO PROPER CONCURRENCY OR SIGNAL HANDLING.
+All the rest of the requirements are there, and the skeleton for code relating to
+concurrency is in place. However, it is not properly implemented. I understand that
+I am turning in this project with this feature missing.
+*/
 
 #include <stdio.h>
 #include <time.h>
@@ -14,19 +20,19 @@ Concurrent UNIX Processes and Shared Memory */
 #include <signal.h>
 
 char errstr[50];
-enum state {
+/*enum state {
 	idle, want_in, in_cs
-};
+};*/
 
 int main(int argc, char *argv[]){
 	
 	// the processes to create
-	pid_t ps[5];
-	int pCount = 5;
+	pid_t ps[20];
+	int pCount = 20;
 	
 	// for concurrency
-	int turn = 0;
-	enum state flag[pCount];
+	//int turn = 0;
+	//enum state flag[pCount];
 	
 	// shared memory
 	int shmid;
@@ -38,7 +44,7 @@ int main(int argc, char *argv[]){
 	// the timer information
     time_t endwait;
     time_t start = time(NULL);
-    int timeToWait = 5; 		// end loop after this time has elapsed
+    int timeToWait = 60; 		// end loop after this time has elapsed
 	
 	// for printing errors
 	snprintf(errstr, sizeof errstr, "%s: Error: ", argv[0]);
@@ -55,6 +61,7 @@ int main(int argc, char *argv[]){
 				break;
 			}
 			// setting name of file of palindromes to read from	
+			// by default it is palindromes.txt
 			case 'l': {
 				int result;
 				char newname[200];
@@ -81,6 +88,7 @@ int main(int argc, char *argv[]){
 				
 				fprintf(stderr, "-l: \n");
 				fprintf(stderr, "\tSets the name of the file to look for palindromes in. Please include extension.\n");
+				fprintf(stderr, "\tDefault is palindromes.txt. \n");
 				fprintf(stderr, "\tex: -l filename \n");
 				
 				fprintf(stderr, "-h: \n");
@@ -107,7 +115,7 @@ int main(int argc, char *argv[]){
     endwait = start + timeToWait;
 	
 	
-	// SHARED MEMORY STUFF
+	// SHARED MEMORY
 	// shared mem is called '1001' which is a palindrome
 	key = 1001;
 	int lc = count(fname);			// line count of file
@@ -198,7 +206,6 @@ int main(int argc, char *argv[]){
 			else { tProc--; }
 		}
     }
-	time_t outOfLoop = time(NULL);
 	
 	// if the while loop ran out and there were still children
 	// then print a notice and kill them
@@ -210,9 +217,6 @@ int main(int argc, char *argv[]){
 		}
 	}
 	
-    printf("end time is %s", ctime(&endwait));
-	
-	printf("Cleaning up shared memory.\n");
 	shmctl(shmid, IPC_RMID, NULL);
 
     return 0;

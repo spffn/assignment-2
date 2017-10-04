@@ -1,7 +1,13 @@
 /* Taylor Clark
 CS 4760
 Assignment #2
-Concurrent UNIX Processes and Shared Memory */
+Concurrent UNIX Processes and Shared Memory
+
+THIS PROJECT DOES NOT DO PROPER CONCURRENCY OR SIGNAL HANDLING.
+All the rest of the requirements are there, and the skeleton for code relating to
+concurrency is in place. However, it is not properly implemented. I understand that
+I am turning in this project with this feature missing.
+*/
 
 #include <ctype.h>
 #include <stdio.h>
@@ -22,15 +28,16 @@ int main(int argc, char *argv[]){
 	int pNum = atoi(argv[1]);		// telling the process which # child it is
 	int lineToTest = atoi(argv[2]);	// which line to test first
 	int ln = atoi(argv[3]);			// total lines in file
+	int result;						// 1 if yes palindrome
 	
 	// for concurrency
-	enum state{
+	/*enum state{
 		idle, want_in, in_cs
 	};
 	int n = 5;
 	extern int turn;
 	extern state flag[n];
-	int local, result;
+	int local*/
 	
 	// shared memory
 	int shmid;
@@ -50,16 +57,16 @@ int main(int argc, char *argv[]){
     }
 	
 	
-	//fprintf(stderr, "Child #%i || Process ID: %ld || Parent ID: %ld\n", pNum + 1 , pid, (long)getppid());
-	
+	// only allow the process to write to a file at max of 5 times
 	int i;
 	for(i = 0; i < 5; i++){
 		
+		// if you're trying to check a line that doesnt exist, end
 		if(lineToTest > ln){
-			printf("Trying to test line higher than exists!\n");
 			return 0;
 		}
 		
+		// read the line from shared memory and save locally for checking
 		int j;
 		char ch;
 		char phrase[100];
@@ -73,11 +80,12 @@ int main(int argc, char *argv[]){
 		}
 		
 		result = is_palindrome(phrase, strlen(phrase));		// 1 = yes
+															// 0 = no
 			
 		timeNote = time(NULL);
 		fprintf(stderr, "%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
 			
-		do {
+		/*do {
 			flag[pNum] = want_in;	// raise flag
 			local = turn;			// set local
 			
@@ -100,12 +108,13 @@ int main(int argc, char *argv[]){
 		
 		// assign self the turn and go into crit section, printing to stderr
 		// when they enter and exit
-		turn = pNum;
-		fprintf(stderr, "%ld: Entering critical section at %s", pid, ctime(&timeNote));
-		critical_section(0, lineToTest, phrase);
+		turn = pNum;*/
+		
+		fprintf(stderr, "%ld: Entering critical section at %s", pid, ctime(&timeNote));*/
+		critical_section(result, lineToTest, phrase);
 		fprintf(stderr, "%ld: Exitting critical section at %s", pid, ctime(&timeNote));
 		
-		// exit
+		/*// exit
 		j = (turn + 1) % n;
 		while(flag[j] == idle){
 			j = (j + 1) %n;
@@ -113,14 +122,16 @@ int main(int argc, char *argv[]){
 		
 		// give turn to next waiting process, change own flag to idle
 		turn = j;
-		flag[pNum] = idle;
+		flag[pNum] = idle;*/
 		
 		lineToTest = lineToTest + 20;
 	}
 	
+	printf("Out of writes! Ending.\n");
 	return 0;
 }
 
+// IS A PALINDROME?
 // check if the passed phrase is a palindrome
 // start by cleaning the string up and then check it
 int is_palindrome(char phrase[], unsigned length) {
@@ -153,39 +164,31 @@ int is_palindrome(char phrase[], unsigned length) {
     return 1;
 }
 
+// CRITICAL SECTION
+// THIS IS NOT MUTUALLY EXCLUSIVE
+// sleep then write to the appropriate file according to whether the
+// phrase was a palindrome or not, then sleep again before exitting
 void critical_section(int yes, int index, char phrase[]){
 	// for sleeps
 	int r;
 	srand(time(NULL));
 	
-	if(yes == 0){
-		// the line was a palindrome
-		// generate val between 0 and 2 to sleep before write
-		r = rand() % (2 - 0 + 1) + 0;
-		sleep(r);
-		
-		FILE * fil;
+	// the line was a palindrome
+	// generate val between 0 and 2 to sleep before write
+	r = rand() % (2 - 0 + 1) + 0;
+	sleep(r);
+	
+	FILE * fil;
+	if(yes == 1){
 		fil = fopen("palin.out", "a");
 		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
-		fclose(fil);
-		
-		// generate val between 0 and 2 to sleep before exit
-		r = rand() % (2 - 0 + 1) + 0;
-		sleep(r);
-	}
-	else {
-		// the line was NOT a palindrome
-		// generate val between 0 and 2 to sleep before write
-		r = rand() % (2 - 0 + 1) + 0;
-		sleep(r);
-		
-		FILE * fil;
+	else{
 		fil = fopen("nopalin.out", "a");
 		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
-		fclose(fil);
-		
-		// generate val between 0 and 2 to sleep before exit
-		r = rand() % (2 - 0 + 1) + 0;
-		sleep(r);
 	}
+	fclose(fil);
+		
+	// generate val between 0 and 2 to sleep before exit
+	r = rand() % (2 - 0 + 1) + 0;
+	sleep(r);
 }
