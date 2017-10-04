@@ -14,13 +14,19 @@ Concurrent UNIX Processes and Shared Memory */
 #include <signal.h>
 
 char errstr[50];
-off_t fsize(char []);
+enum state {
+	idle, want_in, in_cs
+};
 
 int main(int argc, char *argv[]){
 	
 	// the processes to create
 	pid_t ps[5];
 	int pCount = 5;
+	
+	// for concurrency
+	int turn = 0;
+	enum state flag[pCount];
 	
 	// shared memory
 	int shmid;
@@ -99,8 +105,6 @@ int main(int argc, char *argv[]){
 
 	// compute time to end program
     endwait = start + timeToWait;
-
-    printf("Start time is : %s", ctime(&start));
 	
 	
 	// SHARED MEMORY STUFF
@@ -109,7 +113,7 @@ int main(int argc, char *argv[]){
 	int lc = count(fname);			// line count of file
 	char (*mylist)[lc][200];		// shared memory list
 	
-	// create segment of appropriate size to hold all the info from file
+	// create segment to hold all the info from file
 	if ((shmid = shmget(key, 10000, IPC_CREAT | 0666)) < 0) {
         perror("shmget failed");
         exit(1);
@@ -121,10 +125,6 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 			
-	(*mylist)[lc][0] = NULL;	// when mylist[n] returns NULL its because you
-								// have reached its end
-
-	
 	// open file
 	FILE * f = fopen(fname, "r");
 	if (f == 0)
@@ -153,6 +153,7 @@ int main(int argc, char *argv[]){
 	}
 	fclose(f);
 	
+	// start forking off processes
 	for(i = 0; i < pCount; i++){
 		
 		if ((ps[i] = fork()) < 0) {
@@ -178,8 +179,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 	
-	int status;
-	pid_t pid;
+
 	int pC, tProc;		// counter for for loop in while
 						// total active processes
 	tProc = pCount;		// intially set to same # as spawned processes
@@ -216,20 +216,6 @@ int main(int argc, char *argv[]){
 	shmctl(shmid, IPC_RMID, NULL);
 
     return 0;
-}
-
-// get the size of the file
-off_t fsize(char fname[]){
-	struct stat st;
-
-    if (stat(fname, &st) == 0){
-        return st.st_size;
-	}
-
-	perror(errstr); 
-    printf("Cannot determine size of %s\n", fname);
-
-    return 1;
 }
 
 // get the # of lines in the file

@@ -14,13 +14,23 @@ Concurrent UNIX Processes and Shared Memory */
 
 int writeLimit = 0;			// for limiting writes to the files
 time_t timeNote;
+pid_t pid;
 
 int main(int argc, char *argv[]){
 	
-	pid_t pid = (long)getpid();		// process id
+	pid = (long)getpid();			// process id
 	int pNum = atoi(argv[1]);		// telling the process which # child it is
 	int lineToTest = atoi(argv[2]);	// which line to test first
 	int ln = atoi(argv[3]);			// total lines in file
+	
+	// for concurrency
+	enum state{
+		idle, want_in, in_cs
+	};
+	int n = 5;
+	extern int turn;
+	extern state flag[n];
+	int local, result;
 	
 	// shared memory
 	int shmid;
@@ -62,34 +72,48 @@ int main(int argc, char *argv[]){
 			else { phrase[j] = ch; }
 		}
 		
-		if(is_palindrome(phrase, strlen(phrase)) != 0){		
-			// YES it was a palindrome
-			// check has the write limit been met yet? if no, then go to crit sec
-			timeNote = time(NULL);
-			printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
+		result = is_palindrome(phrase, strlen(phrase));		// 1 = yes
 			
-			/*
-			printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
-			critical_section(0);
-			printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
-			*/
+		timeNote = time(NULL);
+		fprintf(stderr, "%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
 			
-			printf("Process %ld, #%i || YES!: %s \n", pid, lineToTest, phrase);
-		}			
-		else { 	
-			// NOT A PALINDROME
-			// check has the write limit been met yet? if no, then go to crit sec
-			timeNote = time(NULL);
-			printf("%ld: Attempting to enter critical section at %s", pid, ctime(&timeNote));
-
-			/*
-			printf("%ld: Entering critical section at %s", pid, ctime(&timeNote));
-			critical_section(1);
-			printf("%ld: Exitting critical section at %s", pid, ctime(&timeNote));
-			*/
-						
-			printf("Process %ld, #%i || NO!: %s \n", pid, lineToTest, phrase);
+		do {
+			flag[pNum] = want_in;	// raise flag
+			local = turn;			// set local
+			
+			// wait till turn
+			while(j != pNum){
+					j = (flag[j] != idle) ? turn : (j + 1) % n;
+			}
+			
+			// delcare intent
+			flag[pNum] = in_cs;
+			
+			// check no one else is there
+			for (j = 0; j < n; j++){
+				if((j != i) && (flag[j] == in_cs)){
+					break;
+				}
+			}
+			
+		} while ((j < n) || (turn != i && flag[turn] != idle));
+		
+		// assign self the turn and go into crit section, printing to stderr
+		// when they enter and exit
+		turn = pNum;
+		fprintf(stderr, "%ld: Entering critical section at %s", pid, ctime(&timeNote));
+		critical_section(0, lineToTest, phrase);
+		fprintf(stderr, "%ld: Exitting critical section at %s", pid, ctime(&timeNote));
+		
+		// exit
+		j = (turn + 1) % n;
+		while(flag[j] == idle){
+			j = (j + 1) %n;
 		}
+		
+		// give turn to next waiting process, change own flag to idle
+		turn = j;
+		flag[pNum] = idle;
 		
 		lineToTest = lineToTest + 20;
 	}
@@ -129,7 +153,7 @@ int is_palindrome(char phrase[], unsigned length) {
     return 1;
 }
 
-void critical_section(int yes){
+void critical_section(int yes, int index, char phrase[]){
 	// for sleeps
 	int r;
 	srand(time(NULL));
@@ -140,7 +164,10 @@ void critical_section(int yes){
 		r = rand() % (2 - 0 + 1) + 0;
 		sleep(r);
 		
-		// write to palin.out
+		FILE * fil;
+		fil = fopen("palin.out", "a");
+		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
+		fclose(fil);
 		
 		// generate val between 0 and 2 to sleep before exit
 		r = rand() % (2 - 0 + 1) + 0;
@@ -152,7 +179,10 @@ void critical_section(int yes){
 		r = rand() % (2 - 0 + 1) + 0;
 		sleep(r);
 		
-		// write to nopalin.out
+		FILE * fil;
+		fil = fopen("nopalin.out", "a");
+		fprintf(fil,"%ld \t %i \t %s", pid, index, phrase);
+		fclose(fil);
 		
 		// generate val between 0 and 2 to sleep before exit
 		r = rand() % (2 - 0 + 1) + 0;
